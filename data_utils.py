@@ -1,5 +1,6 @@
 from pathlib import Path
 import numpy as np
+import random
 import torch
 from torch.utils.data import Dataset
 from torchvision.io import read_image
@@ -78,6 +79,12 @@ class NoisyDataset(Dataset):
 
 
 class Channel2ChannelDataset(Dataset):
+	'''
+	Channel2ChannelDataset
+
+	Dataset that reads in multiple channels of an image and assigns one channel as the target
+	and the other channels as input.
+	'''
 	def __init__(self, input_paths, target_path, input_files=None, target_files=None, file_extension='.png', transform=None, ):
 		self.input_paths = [input_paths] if isinstance(input_paths, Path) else input_paths
 		if input_files:
@@ -96,15 +103,56 @@ class Channel2ChannelDataset(Dataset):
 		return len(self.target_files)
 	
 	def __getitem__(self, index):
-		input_imgs = ()
+		imgs = ()
 		for files in self.input_files:
 			file_name = files[index]
 			img = normalize(read_image(str(file_name)), clip=True).float()
-			input_imgs = input_imgs + (img,)
-		input_imgs = torch.vstack(input_imgs)
+			imgs = imgs + (img,)
+		input_imgs = torch.vstack(imgs)
 
 		target_file_name = self.target_files[index]
 		target = normalize(read_image(str(target_file_name)), clip=True).float()
+		if self.transform:
+			input_imgs = self.transform(input_imgs)
+			target = self.transform(target)
+		return input_imgs, target
+
+
+class RandomChannel2ChannelDataset(Dataset):
+	'''
+	RandomChannel2ChannelDataset
+
+	Dataset that reads in multiple channels of an image and randomly assigns one channel as the target
+	and the other channels as input.
+	'''
+	def __init__(self, input_paths, input_files=None, file_extension='.png', transform=None):
+		self.input_paths = [input_paths] if isinstance(input_paths, Path) else input_paths
+		if input_files:
+			self.input_files = input_files
+		else:
+			self.input_files = []
+			for input_path in self.input_paths:
+				self.input_files.append([input_path.joinpath(f) for f in get_files_in_folder(input_path, file_extension=file_extension)])
+		self.file_extension = file_extension,
+		self.n_files = len(self.input_files[0])
+		self.transform = transform
+		
+	def __len__(self):
+		return self.n_files
+	
+	def __getitem__(self, index):
+		imgs = ()
+		for files in self.input_files:
+			file_name = files[index]
+			img = normalize(read_image(str(file_name)), clip=True).float()
+			imgs = imgs + (img,)
+		# input_imgs, target = train_test_split(imgs, test_size=1, shuffle=True)
+		# target = target[0]
+		input_imgs = imgs
+		target = random.choice(imgs)
+		
+		input_imgs = torch.vstack(input_imgs)
+
 		if self.transform:
 			input_imgs = self.transform(input_imgs)
 			target = self.transform(target)
